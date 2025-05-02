@@ -1,4 +1,5 @@
-import { useForm } from 'react-hook-form';
+import React from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
@@ -16,156 +17,209 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PropFirm } from '@/lib/types';
 
-interface FirmFormProps {
-  firm?: PropFirm | null;
-  onSaved: () => void;
-  onCancel: () => void;
-}
+// Schema for one account offering
+const accountTypeSchema = z.object({
+  accountSize: z.coerce.number().int().positive(),
+  drawdownType: z.enum(['EOD', 'EOT', 'TMDD']),
+  price: z.coerce.number().nonnegative(),
+  currentDiscountRate: z.coerce.number().min(0).max(1),
+  discountedPrice: z.coerce.number().nonnegative(),
+  activationFee: z.coerce.number().nonnegative(),
+  targetProfit: z.coerce.number().nonnegative(),
+  MLL: z.coerce.number().nonnegative(),
+  DLL: z.coerce.number().nonnegative(),
+  minEvaluationDays: z.coerce.number().int().nonnegative(),
+  minFundedDays: z.coerce.number().int().nonnegative(),
+  payoutRatio: z.coerce.number().min(0).max(1),
+  payoutFrequency: z.string(),
+});
 
-const tradingPlatformOptions = [
-  "MetaTrader 4",
-  "MetaTrader 5",
-  "cTrader",
-  "DXtrade",
-  "TradingView",
-  "NinjaTrader",
-  "Tradovate",
-];
+type AccountType = z.infer<typeof accountTypeSchema>;
 
-const tradableAssetOptions = [
-  "Forex",
-  "Indices",
-  "Commodities",
-  "Stocks",
-  "Cryptos",
-  "Futures",
-  "Options",
-];
+// Schema for extra fields
+const extraFieldSchema = z
+  .array(z.object({ key: z.string().min(1), value: z.string().min(1) }))
+  .optional();
 
+// Main form schema
 const firmSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-  logo: z.string().optional(),
-  description: z.string().min(20, { message: "Description must be at least 20 characters" }),
-  websiteUrl: z.string().url({ message: "Must be a valid URL" }).optional().or(z.literal('')),
-  maxAccountSize: z.coerce.number().int().positive({ message: "Must be a positive number" }),
-  profitSplit: z.coerce.number().int().min(1).max(100, { message: "Must be between 1 and 100" }),
-  challengeFeeMin: z.coerce.number().int().nonnegative(),
-  challengeFeeMax: z.coerce.number().int().nonnegative(),
+  name: z.string().min(2),
+  logo: z.string().url().optional(),
+  description: z.string().min(20),
+  websiteUrl: z.string().url().optional().or(z.literal('')),
+  profitSplit: z.coerce.number().min(0).max(1),
+  challengeFeeMin: z.coerce.number().nonnegative(),
+  challengeFeeMax: z.coerce.number().nonnegative(),
   payoutTime: z.coerce.number().int().nonnegative(),
   maxDailyDrawdown: z.coerce.number().int().nonnegative(),
   maxTotalDrawdown: z.coerce.number().int().nonnegative(),
   minTradingDays: z.coerce.number().int().nonnegative(),
-  scalingPlan: z.boolean().default(false),
-  tradingPlatforms: z.array(z.string()).min(1, { message: "Select at least one trading platform" }),
-  tradableAssets: z.array(z.string()).min(1, { message: "Select at least one tradable asset" }),
-  featured: z.boolean().default(false),
+  scalingPlan: z.boolean(),
+  featured: z.boolean(),
+
+  accountTypes: z.array(accountTypeSchema).min(1),
+  tradingPlatforms: z.array(z.string()).min(1),
+  tradableAssets: z.array(z.string()).min(1),
+  evaluationStages: z.array(z.string()).optional(),
+  newsTradingAllowed: z.boolean(),
+  DCAAllowed: z.boolean(),
+  maxTrailingAllowed: z.boolean(),
+  microScalpingAllowed: z.boolean(),
+  maxAccountsPerTrader: z.coerce.number().int().nonnegative(),
+  maxContractsPerTrade: z.coerce.number().int().nonnegative(),
+  copyTradingAllowed: z.boolean(),
+  consistencyEval: z.coerce.number().min(0).max(1),
+  consistencyFunded: z.coerce.number().min(0).max(1),
+  extraFields: extraFieldSchema,
 });
 
 type FirmFormValues = z.infer<typeof firmSchema>;
 
-const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
+interface FirmFormProps {
+  firm?: Partial<FirmFormValues> | null;
+  onSaved: () => void;
+  onCancel: () => void;
+}
+
+// Sample options
+const tradingPlatformOptions = [
+  'DXFeed',
+  'Quantower',
+  'TradingView',
+  'NinjaTrader',
+  'Rithmic',
+  'Tradovate',
+];
+const tradableAssetOptions = [
+  'Forex',
+  'Indices',
+  'Commodities',
+  'Stocks',
+  'Cryptos',
+  'Futures',
+  'Options',
+];
+
+const FirmForm: React.FC<FirmFormProps> = ({ firm, onSaved, onCancel }) => {
   const isEditing = !!firm;
   const { toast } = useToast();
-  
-  const defaultValues: Partial<FirmFormValues> = {
-    name: firm?.name || '',
-    logo: firm?.logo || '',
-    description: firm?.description || '',
-    websiteUrl: firm?.websiteUrl || '',
-    maxAccountSize: firm?.maxAccountSize || 0,
-    profitSplit: firm?.profitSplit || 80,
-    challengeFeeMin: firm?.challengeFeeMin || 0,
-    challengeFeeMax: firm?.challengeFeeMax || 0,
-    payoutTime: firm?.payoutTime || 0,
-    maxDailyDrawdown: firm?.maxDailyDrawdown || 0,
-    maxTotalDrawdown: firm?.maxTotalDrawdown || 0,
-    minTradingDays: firm?.minTradingDays || 0,
-    scalingPlan: firm?.scalingPlan || false,
-    tradingPlatforms: firm?.tradingPlatforms || [],
-    tradableAssets: firm?.tradableAssets || [],
-    featured: firm?.featured || false,
-  };
-  
+
   const form = useForm<FirmFormValues>({
     resolver: zodResolver(firmSchema),
-    defaultValues,
+    defaultValues: {
+      name: firm?.name ?? '',
+      logo: firm?.logo ?? '',
+      description: firm?.description ?? '',
+      websiteUrl: firm?.websiteUrl ?? '',
+      profitSplit: firm?.profitSplit ?? 0.8,
+      challengeFeeMin: firm?.challengeFeeMin ?? 0,
+      challengeFeeMax: firm?.challengeFeeMax ?? 0,
+      payoutTime: firm?.payoutTime ?? 0,
+      maxDailyDrawdown: firm?.maxDailyDrawdown ?? 0,
+      maxTotalDrawdown: firm?.maxTotalDrawdown ?? 0,
+      minTradingDays: firm?.minTradingDays ?? 0,
+      scalingPlan: firm?.scalingPlan ?? false,
+      featured: firm?.featured ?? false,
+      accountTypes:
+        firm?.accountTypes ?? [
+          {
+            accountSize: 50000,
+            drawdownType: 'EOD',
+            price: 0,
+            currentDiscountRate: 0,
+            discountedPrice: 0,
+            activationFee: 0,
+            targetProfit: 0,
+            MLL: 0,
+            DLL: 0,
+            minEvaluationDays: 0,
+            minFundedDays: 0,
+            payoutRatio: 0,
+            payoutFrequency: '',
+          },
+        ],
+      tradingPlatforms: firm?.tradingPlatforms ?? [],
+      tradableAssets: firm?.tradableAssets ?? [],
+      evaluationStages: firm?.evaluationStages ?? [''],
+      newsTradingAllowed: firm?.newsTradingAllowed ?? false,
+      DCAAllowed: firm?.DCAAllowed ?? false,
+      maxTrailingAllowed: firm?.maxTrailingAllowed ?? false,
+      microScalpingAllowed: firm?.microScalpingAllowed ?? false,
+      maxAccountsPerTrader: firm?.maxAccountsPerTrader ?? 1,
+      maxContractsPerTrade: firm?.maxContractsPerTrade ?? 1,
+      copyTradingAllowed: firm?.copyTradingAllowed ?? false,
+      consistencyEval: firm?.consistencyEval ?? 0.4,
+      consistencyFunded: firm?.consistencyFunded ?? 0.4,
+      extraFields: firm?.extraFields ?? [{ key: '', value: '' }],
+    },
   });
 
-  const { mutate: createFirm, isPending: isCreating } = useMutation({
+  const {
+    fields: accountFields,
+    append: appendAccount,
+    remove: removeAccount,
+  } = useFieldArray({ control: form.control, name: 'accountTypes' });
+
+  const {
+    fields: stageFields,
+    append: appendStage,
+    remove: removeStage,
+  } = useFieldArray({ control: form.control, name: 'evaluationStages' });
+
+  const {
+    fields: extraFields,
+    append: appendExtra,
+    remove: removeExtra,
+  } = useFieldArray({ control: form.control, name: 'extraFields' });
+
+  const { mutate: saveFirm, isLoading } = useMutation({
     mutationFn: (data: FirmFormValues) => {
-      return apiRequest('POST', '/api/firms', data);
+      // Convert extraFields array into object
+      const { extraFields, ...rest } = data;
+      const extra = extraFields
+        ? Object.fromEntries(extraFields.map(f => [f.key, f.value]))
+        : undefined;
+      return apiRequest(
+        isEditing ? 'PUT' : 'POST',
+        isEditing ? `/api/firms/${(firm as any)?.id}` : '/api/firms',
+        { ...rest, extra }
+      );
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Prop firm added successfully",
-      });
+      toast({ title: 'Success', description: 'Saved successfully' });
       onSaved();
     },
     onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to add prop firm",
-        variant: "destructive",
-      });
+      toast({ title: 'Error', description: 'Save failed', variant: 'destructive' });
     },
   });
-
-  const { mutate: updateFirm, isPending: isUpdating } = useMutation({
-    mutationFn: (data: FirmFormValues) => {
-      return apiRequest('PUT', `/api/firms/${firm?.id}`, data);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Prop firm updated successfully",
-      });
-      onSaved();
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update prop firm",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const onSubmit = (data: FirmFormValues) => {
-    if (isEditing) {
-      updateFirm(data);
-    } else {
-      createFirm(data);
-    }
-  };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <form onSubmit={form.handleSubmit(saveFirm)} className="space-y-8">
+        {/* Basic Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Firm Name</FormLabel>
+                <FormLabel>Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="FTMO" {...field} />
+                  <Input {...field} placeholder="Firm Name" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          
           <FormField
             control={form.control}
             name="websiteUrl"
@@ -173,14 +227,13 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               <FormItem>
                 <FormLabel>Website URL</FormLabel>
                 <FormControl>
-                  <Input placeholder="https://example.com" {...field} />
+                  <Input {...field} placeholder="https://..." />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
-        
         <FormField
           control={form.control}
           name="description"
@@ -188,173 +241,247 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="Describe the prop firm..." 
-                  className="min-h-[120px]"
-                  {...field} 
-                />
+                <Textarea {...field} className="min-h-[120px]" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="maxAccountSize"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Account Size ($)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="profitSplit"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Profit Split (%)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="challengeFeeMin"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Challenge Fee Min ($)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="challengeFeeMax"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Challenge Fee Max ($)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <FormField
-            control={form.control}
-            name="payoutTime"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payout Time (days)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="maxDailyDrawdown"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Daily Drawdown (%)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="maxTotalDrawdown"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Total Drawdown (%)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="minTradingDays"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Minimum Trading Days</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <div className="flex items-end space-x-4">
-            <FormField
-              control={form.control}
-              name="scalingPlan"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="font-normal cursor-pointer">Has Scaling Plan</FormLabel>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="featured"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="font-normal cursor-pointer">Featured Firm</FormLabel>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
+                {/* Account Types */}
+                <section>
+          <h3 className="text-lg font-medium">Account Types</h3>
+          <div className="space-y-4">
+            {accountFields.map((acct, idx) => (
+              <div key={acct.id} className="p-4 border rounded-lg relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={() => removeAccount(idx)}
+                >
+                  Remove
+                </Button>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Size */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.accountSize`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Size ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Drawdown Type */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.drawdownType`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Drawdown Type</FormLabel>
+                        <FormControl>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="EOD">EOD</SelectItem>
+                              <SelectItem value="EOT">EOT</SelectItem>
+                              <SelectItem value="TMDD">TMDD</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Price */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.price`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Discount Rate */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.currentDiscountRate`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Discount Rate (0–100)</FormLabel>
+                        <FormControl>
+                          <Input step="0.01" type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Discounted Price */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.discountedPrice`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Discounted Price ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Activation Fee */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.activationFee`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Activation Fee ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Target Profit */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.targetProfit`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Target Profit ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* MLL */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.MLL`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Max Loss Limit ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* DLL */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.DLL`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Daily Loss Limit ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Min Evaluation Days */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.minEvaluationDays`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Min Eval Days</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Min Funded Days */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.minFundedDays`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Min Funded Days</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Payout Ratio */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.payoutRatio`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payout Ratio (0–100)</FormLabel>
+                        <FormControl>
+                          <Input step="0" type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Payout Frequency */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.payoutFrequency`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payout Frequency</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. monthly" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              onClick={() =>
+                appendAccount({
+                  accountSize: 0,
+                  drawdownType: 'EOD',
+                  price: 0,
+                  currentDiscountRate: 0,
+                  discountedPrice: 0,
+                  activationFee: 0,
+                  targetProfit: 0,
+                  MLL: 0,
+                  DLL: 0,
+                  minEvaluationDays: 0,
+                  minFundedDays: 0,
+                  payoutRatio: 0,
+                  payoutFrequency: '',
+                })
+              }
+            >
+              + Add Account Type
+            </Button>
           </div>
-        </div>
-        
+        </section>
+
+        {/* Platforms & Assets */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <FormField
             control={form.control}
@@ -401,7 +528,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               </FormItem>
             )}
           />
-          
           <FormField
             control={form.control}
             name="tradableAssets"
@@ -448,23 +574,162 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
             )}
           />
         </div>
-        
+
+        {/* Evaluation Stages */}
+        <section>
+          <h3 className="text-lg font-medium">Evaluation Stages</h3>
+          <div className="space-y-2">
+            {stageFields.map((st, idx) => (
+              <div key={st.id} className="flex items-center gap-2">
+                <FormField
+                  control={form.control}
+                  name={`evaluationStages.${idx}`}
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input {...field} placeholder="Stage name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button variant="ghost" onClick={() => removeStage(idx)}>Remove</Button>
+              </div>
+            ))}
+            <Button type="button" onClick={() => appendStage('')}>+ Add Stage</Button>
+          </div>
+        </section>
+
+        {/* Toggles & Flags */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { name: 'newsTradingAllowed', label: 'News Trading Allowed' },
+            { name: 'DCAAllowed', label: 'DCA Allowed' },
+            { name: 'maxTrailingAllowed', label: 'Max Trailing Allowed' },
+            { name: 'microScalpingAllowed', label: 'Microscalping Allowed' },
+            { name: 'copyTradingAllowed', label: 'Copy Trading Allowed' },
+          ].map(({ name, label }) => (
+            <FormField
+              key={name}
+              control={form.control}
+              name={name as any}
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-2">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="font-normal cursor-pointer">{label}</FormLabel>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ))}
+        </div>
+
+        {/* Numeric Limits */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormField
+            control={form.control}
+            name="maxAccountsPerTrader"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Accounts/Trader</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="maxContractsPerTrade"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Contracts/Trade</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Consistency Rules */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormField
+            control={form.control}
+            name="consistencyEval"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Consistency (Eval) %</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} step={0.01} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="consistencyFunded"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Consistency (Funded) %</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} step={0.01} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Extra Key-Value Rules */}
+        <section>
+          <h3 className="text-lg font-medium">Extra Rules</h3>
+          <div className="space-y-2">
+            {extraFields.map((ef, idx) => (
+              <div key={ef.id} className="flex gap-2 items-center">
+                <FormField
+                  control={form.control}
+                  name={`extraFields.${idx}.key`}
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input {...field} placeholder="Rule name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`extraFields.${idx}.value`}
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input {...field} placeholder="Value" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button variant="ghost" onClick={() => removeExtra(idx)}>Remove</Button>
+              </div>
+            ))}
+            <Button type="button" onClick={() => appendExtra({ key: '', value: '' })}>
+              + Add Rule
+            </Button>
+          </div>
+        </section>
+
+        {/* Actions */}
         <div className="flex justify-end space-x-4">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={isCreating || isUpdating}
-          >
-            {isEditing 
-              ? (isUpdating ? 'Updating...' : 'Update Firm') 
-              : (isCreating ? 'Creating...' : 'Create Firm')
-            }
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="submit" disabled={isLoading}>
+            {isEditing ? 'Update Firm' : 'Create Firm'}
           </Button>
         </div>
       </form>
