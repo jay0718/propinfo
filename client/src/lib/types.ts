@@ -117,6 +117,12 @@ export interface AccountType {
   /** Market Depth Data */
   marketDepthData?: boolean;
   marketDepthDataLevel?: string;
+
+  /** Company‐wide profit split */
+  hasProfitSplitChange: boolean;
+  initialProfitSplit: number;
+  finalProfitSplit: number;
+  profitSplitCondition?: string;
 }
 
 /** A proprietary‐trading firm with one or more account offerings */
@@ -124,24 +130,18 @@ export interface PropFirm {
   id: number;
   name: string;
   logo?: string;
+  backgroundImage?: string;
   description: string;
   websiteUrl?: string;
 
-  /** Company‐wide profit split (e.g. 0.8 = 80% to trader) */
-  profitSplit: number;
+  /** Theoretical Minimum Days until first payout */
+  minPayoutTime?: number;
 
-  /** Min/max challenge fee */
-  challengeFeeMin?: number;
-  challengeFeeMax?: number;
-
-  /** Days until first payout */
-  payoutTime?: number;
-
-  /** Min trading days rule (firm‐wide) */
-  minTradingDays?: number;
+  /** Payout Window */
+  payoutWindow?: string;
 
   tradingPlatforms: string[];
-  tradableAssets: string[];     // e.g. ['Futures', 'FX']
+  tradableAssets: string[];
   featured: boolean;
 
   avgRating?: number;
