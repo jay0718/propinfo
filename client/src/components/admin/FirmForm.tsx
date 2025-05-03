@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -31,7 +31,7 @@ const accountTypeSchema = z.object({
   accountSize: z.coerce.number().int().positive(),
   drawdownType: z.enum(['EOD', 'EOT', 'TMDD']),
   price: z.coerce.number().nonnegative(),
-  currentDiscountRate: z.coerce.number().min(0).max(1),
+  currentDiscountRate: z.coerce.number().min(0).max(100),
   discountedPrice: z.coerce.number().nonnegative(),
   activationFee: z.coerce.number().nonnegative(),
   targetProfit: z.coerce.number().nonnegative(),
@@ -39,7 +39,7 @@ const accountTypeSchema = z.object({
   DLL: z.coerce.number().nonnegative(),
   minEvaluationDays: z.coerce.number().int().nonnegative(),
   minFundedDays: z.coerce.number().int().nonnegative(),
-  payoutRatio: z.coerce.number().min(0).max(1),
+  payoutRatio: z.coerce.number().min(0).max(100),
   payoutFrequency: z.string(),
 });
 
@@ -77,8 +77,8 @@ const firmSchema = z.object({
   maxAccountsPerTrader: z.coerce.number().int().nonnegative(),
   maxContractsPerTrade: z.coerce.number().int().nonnegative(),
   copyTradingAllowed: z.boolean(),
-  consistencyEval: z.coerce.number().min(0).max(1),
-  consistencyFunded: z.coerce.number().min(0).max(1),
+  consistencyEval: z.coerce.number().min(0).max(100),
+  consistencyFunded: z.coerce.number().min(0).max(100),
   extraFields: extraFieldSchema,
 });
 
@@ -180,17 +180,30 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
       maxAccountsPerTrader: firm?.maxAccountsPerTrader || 1,
       maxContractsPerTrade: firm?.maxContractsPerTrade || 1,
       copyTradingAllowed: firm?.copyTradingAllowed || false,
-      consistencyEval: firm?.consistencyEval || 0.4,
-      consistencyFunded: firm?.consistencyFunded || 0.4,
+      consistencyEval: firm?.consistencyEval || 40,
+      consistencyFunded: firm?.consistencyFunded || 40,
       extraFields: normalizedExtra,
     },
   });
 
+  const { control, watch, setValue } = form
   const {
     fields: accountFields,
     append: appendAccount,
     remove: removeAccount,
   } = useFieldArray({ control: form.control, name: 'accountTypes' });
+
+  // For each account row we’ll watch price & rate and update discountedPrice:
+  accountFields.forEach((_, idx) => {
+    const price = watch(`accountTypes.${idx}.price`)
+    const rate  = watch(`accountTypes.${idx}.currentDiscountRate`)
+    useEffect(() => {
+      const computed = +(price * (1 - rate/100)).toFixed(2)
+      // only call setValue if it actually changed:
+      setValue(`accountTypes.${idx}.discountedPrice`, computed, { shouldValidate: true })
+    }, [price, rate, idx])
+  })
+
 
   const {
     fields: stageFields,
@@ -372,7 +385,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                       <FormItem>
                         <FormLabel>Discount Rate (0–100)</FormLabel>
                         <FormControl>
-                          <Input step="0.01" type="number" {...field} />
+                          <Input step="1" type="number" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -380,13 +393,16 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                   />
                   {/* Discounted Price */}
                   <FormField
-                    control={form.control}
+                    control={control}
                     name={`accountTypes.${idx}.discountedPrice`}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Discounted Price ($)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            {...field}
+                            readOnly
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
