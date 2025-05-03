@@ -94,16 +94,6 @@ const ComparisonTool = () => {
                 <TableBody className="bg-white divide-y divide-neutral-200">
                   <TableRow>
                     <TableCell className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">
-                      Account Sizes
-                    </TableCell>
-                    {comparisonFirms.map(firm => (
-                      <TableCell key={firm.id} className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">
-                        ${firm.maxAccountSize / 1000}K
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">
                       Challenge Fee
                     </TableCell>
                     {comparisonFirms.map(firm => (

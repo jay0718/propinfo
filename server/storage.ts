@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { 
   users, type User, type InsertUser, 
   propFirms, type PropFirm, type InsertPropFirm,
@@ -5,6 +7,23 @@ import {
   resources, type Resource, type InsertResource,
   adminCredentials, type AdminCredentials, type InsertAdminCredentials
 } from "@shared/schema";
+
+const DATA_FILE = path.resolve(process.cwd(), "data", "storage.json");
+
+interface DiskData {
+  users: User[];
+  propFirms: PropFirm[];
+  reviews: Review[];
+  resources: Resource[];
+  adminCredentials: AdminCredentials[];
+  counters: {
+    currentUserId: number;
+    currentFirmId: number;
+    currentReviewId: number;
+    currentResourceId: number;
+    currentAdminId: number;
+  };
+}
 
 export interface IStorage {
   // User operations
@@ -72,8 +91,60 @@ export class MemStorage implements IStorage {
       password: 'admin123' // In production, this would be hashed
     });
 
-    // Initialize with sample data
-    this.initSampleData();
+    this.ensureDataDir();
+    if (fs.existsSync(DATA_FILE)) {
+      this.loadFromDisk();
+    } else {
+      // first run: seed with your samples, then persist
+      this.initSampleData();
+      this.saveToDisk();
+    }
+  }
+
+  private ensureDataDir() {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
+
+  private loadFromDisk() {
+    const raw = fs.readFileSync(DATA_FILE, "utf-8");
+    const data: DiskData = JSON.parse(raw);
+
+    // load maps
+    data.users.forEach(u => this.users.set(u.id, u));
+    data.propFirms.forEach(f => this.propFirms.set(f.id, f));
+    data.reviews.forEach(r => this.reviews.set(r.id, r));
+    data.resources.forEach(r => this.resources.set(r.id, r));
+    data.adminCredentials.forEach(a => this.adminCredentials.set(a.id, a));
+
+    // restore counters
+    this.currentUserId     = data.counters.currentUserId;
+    this.currentFirmId     = data.counters.currentFirmId;
+    this.currentReviewId   = data.counters.currentReviewId;
+    this.currentResourceId = data.counters.currentResourceId;
+    this.currentAdminId    = data.counters.currentAdminId;
+  }
+
+  private saveToDisk() {
+    const diskData: DiskData = {
+      users: Array.from(this.users.values()),
+      propFirms: Array.from(this.propFirms.values()),
+      reviews: Array.from(this.reviews.values()),
+      resources: Array.from(this.resources.values()),
+      adminCredentials: Array.from(this.adminCredentials.values()),
+      counters: {
+        currentUserId:   this.currentUserId,
+        currentFirmId:   this.currentFirmId,
+        currentReviewId: this.currentReviewId,
+        currentResourceId: this.currentResourceId,
+        currentAdminId:  this.currentAdminId,
+      },
+    };
+    fs.writeFileSync(DATA_FILE, JSON.stringify(diskData, null, 2), "utf-8");
+  }
+
+  public flush(): void {
+    this.saveToDisk();
   }
 
   // =================== User Methods =================== //
@@ -116,6 +187,7 @@ export class MemStorage implements IStorage {
       avgRating: 0
     };
     this.propFirms.set(id, newFirm);
+    this.saveToDisk();
     return newFirm;
   }
 
@@ -125,11 +197,14 @@ export class MemStorage implements IStorage {
     
     const updatedFirm = { ...firm, ...updates };
     this.propFirms.set(id, updatedFirm);
+    this.saveToDisk();
     return updatedFirm;
   }
 
   async deletePropFirm(id: number): Promise<boolean> {
-    return this.propFirms.delete(id);
+    const ok = this.propFirms.delete(id);
+    if (ok) this.saveToDisk();
+    return ok;
   }
 
   // =================== Review Methods =================== //
@@ -229,7 +304,6 @@ export class MemStorage implements IStorage {
       logo: "",
       description: "FTMO is a proprietary trading firm offering funded accounts to successful traders. They have a rigorous two-phase evaluation process before providing a funded account.",
       websiteUrl: "https://ftmo.com",
-      maxAccountSize: 200000,
       profitSplit: 80,
       challengeFeeMin: 540,
       challengeFeeMax: 1080,
@@ -248,7 +322,6 @@ export class MemStorage implements IStorage {
       logo: "",
       description: "Funded Next provides traders with capital to trade financial markets. They offer a straightforward evaluation process and competitive profit splits.",
       websiteUrl: "https://fundednext.com",
-      maxAccountSize: 400000,
       profitSplit: 90,
       challengeFeeMin: 349,
       challengeFeeMax: 999,
@@ -267,7 +340,6 @@ export class MemStorage implements IStorage {
       logo: "",
       description: "The Funded Trader offers funded accounts with a user-friendly evaluation process. They are known for their quick payouts and excellent customer support.",
       websiteUrl: "https://thefundedtrader.com",
-      maxAccountSize: 200000,
       profitSplit: 85,
       challengeFeeMin: 375,
       challengeFeeMax: 975,

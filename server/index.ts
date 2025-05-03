@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { inspect } from 'util';
+import { storage } from "./storage";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -68,3 +70,12 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 })();
+
+inspect.defaultOptions = {
+  ...inspect.defaultOptions,
+  maxStringLength: null,   // no limit
+  depth:         null,     // recurse infinitely
+};
+
+process.on('SIGINT',  () => { storage.flush(); process.exit(0); });
+process.on('SIGTERM', () => { storage.flush(); process.exit(0); });

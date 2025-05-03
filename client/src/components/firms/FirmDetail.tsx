@@ -15,7 +15,6 @@ const FirmDetail = ({ firm }: FirmDetailProps) => {
     name,
     description,
     websiteUrl,
-    maxAccountSize,
     profitSplit,
     challengeFeeMin,
     challengeFeeMax,
@@ -63,16 +62,6 @@ const FirmDetail = ({ firm }: FirmDetailProps) => {
             </div>
             
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center mb-2">
-                    <DollarSign className="h-5 w-5 text-primary-500 mr-2" />
-                    <h4 className="text-lg font-medium">Account Sizing</h4>
-                  </div>
-                  <p className="text-neutral-600">Maximum account size up to ${maxAccountSize.toLocaleString()}</p>
-                </CardContent>
-              </Card>
-              
               <Card>
                 <CardContent className="pt-6">
                   <div className="flex items-center mb-2">

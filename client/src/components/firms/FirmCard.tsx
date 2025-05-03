@@ -9,7 +9,7 @@ interface FirmCardProps {
 }
 
 const FirmCard = ({ firm }: FirmCardProps) => {
-  const { id, name, maxAccountSize, profitSplit, challengeFeeMin, challengeFeeMax, payoutTime, avgRating } = firm;
+  const { id, name, profitSplit, challengeFeeMin, challengeFeeMax, payoutTime, avgRating } = firm;
   
   // Fetch firm reviews to get count
   const { data: reviews } = useQuery({
@@ -28,10 +28,6 @@ const FirmCard = ({ firm }: FirmCardProps) => {
           </div>
         </div>
         <div className="mt-4">
-          <div className="flex justify-between py-2 border-b border-neutral-100">
-            <span className="text-sm text-neutral-500">Max Account Size</span>
-            <span className="font-medium">${maxAccountSize?.toLocaleString()}</span>
-          </div>
           <div className="flex justify-between py-2 border-b border-neutral-100">
             <span className="text-sm text-neutral-500">Profit Split</span>
             <span className="font-medium">{profitSplit}%</span>

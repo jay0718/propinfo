@@ -22,7 +22,6 @@ export const propFirms = pgTable("prop_firms", {
   logo: text("logo"),
   description: text("description").notNull(),
   websiteUrl: text("website_url"),
-  maxAccountSize: integer("max_account_size").notNull(),
   profitSplit: integer("profit_split").notNull(),
   challengeFeeMin: integer("challenge_fee_min"),
   challengeFeeMax: integer("challenge_fee_max"),

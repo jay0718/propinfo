@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PropFirm } from '@/lib/types';
 
 // Schema for one account offering
 const accountTypeSchema = z.object({
@@ -51,11 +52,11 @@ const extraFieldSchema = z
 
 // Main form schema
 const firmSchema = z.object({
-  name: z.string().min(2),
-  logo: z.string().url().optional(),
+  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
+  logo: z.string().optional(),
   description: z.string().min(20),
-  websiteUrl: z.string().url().optional().or(z.literal('')),
-  profitSplit: z.coerce.number().min(0).max(1),
+  websiteUrl: z.string().url({ message: "Must be a valid URL" }).optional().or(z.literal('')),
+  profitSplit: z.coerce.number().int().min(1).max(100, { message: "Must be between 1 and 100" }),
   challengeFeeMin: z.coerce.number().nonnegative(),
   challengeFeeMax: z.coerce.number().nonnegative(),
   payoutTime: z.coerce.number().int().nonnegative(),
@@ -63,11 +64,11 @@ const firmSchema = z.object({
   maxTotalDrawdown: z.coerce.number().int().nonnegative(),
   minTradingDays: z.coerce.number().int().nonnegative(),
   scalingPlan: z.boolean(),
-  featured: z.boolean(),
+  featured: z.boolean().default(false),
 
   accountTypes: z.array(accountTypeSchema).min(1),
-  tradingPlatforms: z.array(z.string()).min(1),
-  tradableAssets: z.array(z.string()).min(1),
+  tradingPlatforms: z.array(z.string()).min(1, { message: "Select at least one trading platform" }),
+  tradableAssets: z.array(z.string()).min(1, { message: "Select at least one tradable asset" }),
   evaluationStages: z.array(z.string()).optional(),
   newsTradingAllowed: z.boolean(),
   DCAAllowed: z.boolean(),
@@ -84,7 +85,7 @@ const firmSchema = z.object({
 type FirmFormValues = z.infer<typeof firmSchema>;
 
 interface FirmFormProps {
-  firm?: Partial<FirmFormValues> | null;
+  firm?: PropFirm | null;
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -108,28 +109,51 @@ const tradableAssetOptions = [
   'Options',
 ];
 
-const FirmForm: React.FC<FirmFormProps> = ({ firm, onSaved, onCancel }) => {
+const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
   const isEditing = !!firm;
   const { toast } = useToast();
+
+  const normalizedExtra: { key: string; value: string }[] = React.useMemo(() => {
+    // 1) If it's already an array of {key,value}, use it directly
+    if (Array.isArray(firm?.extra)) {
+      return (firm.extra as any[])
+        .map(item => ({
+          key: typeof item.key === 'string' ? item.key : '',
+          value: typeof item.value === 'string' ? item.value : '',
+        }));
+    }
+  
+    // 2) If it's an object, turn its entries into key/value pairs
+    if (firm?.extra && typeof firm.extra === 'object') {
+      return Object.entries(firm.extra as Record<string, any>)
+        .map(([k, v]) => ({
+          key: k,
+          value: v == null ? '' : String(v),
+        }));
+    }
+  
+    // 3) Fallback to one empty field
+    return [{ key: '', value: '' }];
+  }, [firm?.extra]);
 
   const form = useForm<FirmFormValues>({
     resolver: zodResolver(firmSchema),
     defaultValues: {
-      name: firm?.name ?? '',
-      logo: firm?.logo ?? '',
-      description: firm?.description ?? '',
-      websiteUrl: firm?.websiteUrl ?? '',
-      profitSplit: firm?.profitSplit ?? 0.8,
-      challengeFeeMin: firm?.challengeFeeMin ?? 0,
-      challengeFeeMax: firm?.challengeFeeMax ?? 0,
-      payoutTime: firm?.payoutTime ?? 0,
-      maxDailyDrawdown: firm?.maxDailyDrawdown ?? 0,
-      maxTotalDrawdown: firm?.maxTotalDrawdown ?? 0,
-      minTradingDays: firm?.minTradingDays ?? 0,
-      scalingPlan: firm?.scalingPlan ?? false,
-      featured: firm?.featured ?? false,
+      name: firm?.name || '',
+      logo: firm?.logo || '',
+      description: firm?.description || '',
+      websiteUrl: firm?.websiteUrl || '',
+      profitSplit: firm?.profitSplit || 80,
+      challengeFeeMin: firm?.challengeFeeMin || 0,
+      challengeFeeMax: firm?.challengeFeeMax || 0,
+      payoutTime: firm?.payoutTime || 0,
+      maxDailyDrawdown: firm?.maxDailyDrawdown || 0,
+      maxTotalDrawdown: firm?.maxTotalDrawdown || 0,
+      minTradingDays: firm?.minTradingDays || 0,
+      scalingPlan: firm?.scalingPlan || false,
+      featured: firm?.featured || false,
       accountTypes:
-        firm?.accountTypes ?? [
+        firm?.accountTypes || [
           {
             accountSize: 50000,
             drawdownType: 'EOD',
@@ -146,19 +170,19 @@ const FirmForm: React.FC<FirmFormProps> = ({ firm, onSaved, onCancel }) => {
             payoutFrequency: '',
           },
         ],
-      tradingPlatforms: firm?.tradingPlatforms ?? [],
-      tradableAssets: firm?.tradableAssets ?? [],
-      evaluationStages: firm?.evaluationStages ?? [''],
-      newsTradingAllowed: firm?.newsTradingAllowed ?? false,
-      DCAAllowed: firm?.DCAAllowed ?? false,
-      maxTrailingAllowed: firm?.maxTrailingAllowed ?? false,
-      microScalpingAllowed: firm?.microScalpingAllowed ?? false,
-      maxAccountsPerTrader: firm?.maxAccountsPerTrader ?? 1,
-      maxContractsPerTrade: firm?.maxContractsPerTrade ?? 1,
-      copyTradingAllowed: firm?.copyTradingAllowed ?? false,
-      consistencyEval: firm?.consistencyEval ?? 0.4,
-      consistencyFunded: firm?.consistencyFunded ?? 0.4,
-      extraFields: firm?.extraFields ?? [{ key: '', value: '' }],
+      tradingPlatforms: firm?.tradingPlatforms || [],
+      tradableAssets: firm?.tradableAssets || [],
+      evaluationStages: firm?.evaluationStages || [''],
+      newsTradingAllowed: firm?.newsTradingAllowed || false,
+      DCAAllowed: firm?.DCAAllowed || false,
+      maxTrailingAllowed: firm?.maxTrailingAllowed || false,
+      microScalpingAllowed: firm?.microScalpingAllowed || false,
+      maxAccountsPerTrader: firm?.maxAccountsPerTrader || 1,
+      maxContractsPerTrade: firm?.maxContractsPerTrade || 1,
+      copyTradingAllowed: firm?.copyTradingAllowed || false,
+      consistencyEval: firm?.consistencyEval || 0.4,
+      consistencyFunded: firm?.consistencyFunded || 0.4,
+      extraFields: normalizedExtra,
     },
   });
 
@@ -180,31 +204,59 @@ const FirmForm: React.FC<FirmFormProps> = ({ firm, onSaved, onCancel }) => {
     remove: removeExtra,
   } = useFieldArray({ control: form.control, name: 'extraFields' });
 
-  const { mutate: saveFirm, isLoading } = useMutation({
+  const { mutate: createFirm, isPending: isCreating } = useMutation({
     mutationFn: (data: FirmFormValues) => {
-      // Convert extraFields array into object
-      const { extraFields, ...rest } = data;
-      const extra = extraFields
-        ? Object.fromEntries(extraFields.map(f => [f.key, f.value]))
-        : undefined;
-      return apiRequest(
-        isEditing ? 'PUT' : 'POST',
-        isEditing ? `/api/firms/${(firm as any)?.id}` : '/api/firms',
-        { ...rest, extra }
-      );
+      return apiRequest('POST', '/api/firms', data);
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'Saved successfully' });
+      toast({
+        title: "Success",
+        description: "Prop firm added successfully",
+      });
       onSaved();
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Save failed', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "Failed to add prop firm",
+        variant: "destructive",
+      });
     },
   });
 
+  const { mutate: updateFirm, isPending: isUpdating } = useMutation({
+    mutationFn: (data: FirmFormValues) => {
+      return apiRequest('PUT', `/api/firms/${firm?.id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Prop firm updated successfully",
+      });
+      onSaved();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update prop firm",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: FirmFormValues) => {
+    if (isEditing) {
+      console.log('Updating firm:', data);    
+      updateFirm(data);
+    } else {
+      console.log('Creating firm:', data);    
+      createFirm(data);
+    }
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(saveFirm)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         {/* Basic Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
@@ -728,9 +780,14 @@ const FirmForm: React.FC<FirmFormProps> = ({ firm, onSaved, onCancel }) => {
         {/* Actions */}
         <div className="flex justify-end space-x-4">
           <Button variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isLoading}>
-            {isEditing ? 'Update Firm' : 'Create Firm'}
-          </Button>
+          <Button
+            type="submit"
+            disabled={isCreating || isUpdating}
+          >
+            {isEditing
+              ? (isUpdating ? 'Updating…' : 'Update Firm')
+              : (isCreating ? 'Creating…' : 'Create Firm')}
+        </Button>
         </div>
       </form>
     </Form>

@@ -128,7 +128,6 @@ const AdminPanel = () => {
                       <div>
                         <CardTitle>{firm.name}</CardTitle>
                         <CardDescription>
-                          Max Account: ${firm.maxAccountSize?.toLocaleString()} | 
                           Profit Split: {firm.profitSplit}%
                         </CardDescription>
                       </div>

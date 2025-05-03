@@ -14,9 +14,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         next();
       } catch (error) {
         if (error instanceof ZodError) {
+          console.error(
+            'Zod validation failed – issues:\n',
+            JSON.stringify(error.issues, null, 2)
+          )
           const validationError = fromZodError(error);
+          console.error('fromZodError message:\n', validationError.message)
           return res.status(400).json({ message: validationError.message });
         }
+        console.error('Unexpected validation error:', error)
         return res.status(400).json({ message: "Invalid request body" });
       }
     };
@@ -68,8 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const newFirm = await storage.createPropFirm(req.body);
       res.status(201).json(newFirm);
-    } catch (error) {
-      res.status(500).json({ message: "Error creating prop firm" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error creating prop firm", details: error.errors});
     }
   });
 

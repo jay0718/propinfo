@@ -121,14 +121,6 @@ const CompareTable = () => {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium bg-neutral-50">Account Sizes</TableCell>
-                {comparisonFirms.map(firm => (
-                  <TableCell key={firm.id}>
-                    ${firm.maxAccountSize.toLocaleString()}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
                 <TableCell className="font-medium bg-neutral-50">Challenge Fee</TableCell>
                 {comparisonFirms.map(firm => (
                   <TableCell key={firm.id}>
