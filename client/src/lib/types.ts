@@ -147,6 +147,8 @@ export interface PropFirm {
   avgRating?: number;
   ratingCount: number;
 
+  accountTypes: AccountType[];
+
   /** Any extra one-off or firm-unique rules */
   extra?: Record<string, any>;
 }
