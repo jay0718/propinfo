@@ -13,6 +13,9 @@ export interface AccountType {
   accountType: 'Challenge' | 'Funding' | 'Live' | 'InstantFunded' | string;
   stage?: number;
 
+  /** Referral Code */
+  referralCode?: string;
+
   /** Account size in USD (e.g. 50000) */
   accountSize: number;
   startingBalance?: number;
