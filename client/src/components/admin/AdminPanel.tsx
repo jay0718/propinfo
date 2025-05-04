@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@/components/ui/tabs";
+} from '@/components/ui/tabs';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { PropFirm, Resource } from '@/lib/types';
@@ -24,23 +24,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 const AdminPanel = () => {
   const { isAuthenticated } = useAuth();
   const [addingFirm, setAddingFirm] = useState(false);
-  const [addingResource, setAddingResource] = useState(false);
   const [editingFirm, setEditingFirm] = useState<PropFirm | null>(null);
+  const [addingResource, setAddingResource] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
-  
-  const { 
-    data: firms,
+
+  const {
+    data: firms = [],
     isLoading: isLoadingFirms,
-    refetch: refetchFirms
+    refetch: refetchFirms,
   } = useQuery<PropFirm[]>({
     queryKey: ['/api/firms'],
     enabled: isAuthenticated,
   });
-  
-  const { 
-    data: resources, 
+
+  const {
+    data: resources = [],
     isLoading: isLoadingResources,
-    refetch: refetchResources
+    refetch: refetchResources,
   } = useQuery<Resource[]>({
     queryKey: ['/api/resources'],
     enabled: isAuthenticated,
@@ -70,7 +70,7 @@ const AdminPanel = () => {
         <TabsContent value="firms" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Prop Firms</h2>
-            <Button 
+            <Button
               onClick={() => {
                 setEditingFirm(null);
                 setAddingFirm(true);
@@ -82,33 +82,22 @@ const AdminPanel = () => {
             </Button>
           </div>
 
-          {(addingFirm || editingFirm) && (
+          {/* Add‑New‑Firm form */}
+          {addingFirm && (
             <Card>
               <CardHeader>
-                <CardTitle>{editingFirm ? 'Edit Firm' : 'Add New Firm'}</CardTitle>
-                <CardDescription>
-                  {editingFirm 
-                    ? `Editing details for ${editingFirm.name}`
-                    : 'Fill in the details to add a new prop trading firm'
-                  }
-                </CardDescription>
+                <CardTitle>Add New Firm</CardTitle>
+                <CardDescription>Fill in the details to add a new prop trading firm</CardDescription>
               </CardHeader>
               <CardContent>
-                <FirmForm 
-                  firm={editingFirm} 
-                  onSaved={handleFirmSaved} 
-                  onCancel={() => {
-                    setAddingFirm(false);
-                    setEditingFirm(null);
-                  }}
-                />
+                <FirmForm firm={null} onSaved={handleFirmSaved} onCancel={() => setAddingFirm(false)} />
               </CardContent>
             </Card>
           )}
 
           {isLoadingFirms ? (
             <div className="space-y-4">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <Card key={i}>
                   <CardHeader>
                     <Skeleton className="h-6 w-48" />
@@ -120,28 +109,46 @@ const AdminPanel = () => {
                 </Card>
               ))}
             </div>
-          ) : firms && firms.length > 0 ? (
+          ) : firms.length > 0 ? (
             <div className="space-y-4">
-              {firms.map(firm => (
-                <Card key={firm.id}>
-                  <CardHeader className="py-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle>{firm.name}</CardTitle>
+              {firms.map((firm) => (
+                <React.Fragment key={firm.id}>
+                  <Card>
+                    <CardHeader className="py-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{firm.name}</CardTitle>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAddingFirm(false);
+                            setEditingFirm(firm);
+                          }}
+                          disabled={addingFirm || !!editingFirm}
+                        >
+                          Edit
+                        </Button>
                       </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => {
-                          setAddingFirm(false);
-                          setEditingFirm(firm);
-                        }}
-                        disabled={addingFirm || !!editingFirm}
-                      >
-                        Edit
-                      </Button>
-                    </div>
-                  </CardHeader>
-                </Card>
+                    </CardHeader>
+                  </Card>
+
+                  {/* Inline edit form for this firm */}
+                  {editingFirm?.id === firm.id && (
+                    <Card className="mt-2">
+                      <CardHeader>
+                        <CardTitle>Edit {firm.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <FirmForm
+                          firm={editingFirm}
+                          onSaved={handleFirmSaved}
+                          onCancel={() => setEditingFirm(null)}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           ) : (
@@ -153,10 +160,11 @@ const AdminPanel = () => {
           )}
         </TabsContent>
 
+        {/* ——— Resources Tab ——— */}
         <TabsContent value="resources" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Educational Resources</h2>
-            <Button 
+            <Button
               onClick={() => {
                 setEditingResource(null);
                 setAddingResource(true);
@@ -168,33 +176,21 @@ const AdminPanel = () => {
             </Button>
           </div>
 
-          {(addingResource || editingResource) && (
+          {addingResource && (
             <Card>
               <CardHeader>
-                <CardTitle>{editingResource ? 'Edit Resource' : 'Add New Resource'}</CardTitle>
-                <CardDescription>
-                  {editingResource 
-                    ? `Editing article "${editingResource.title}"`
-                    : 'Create a new educational resource or article'
-                  }
-                </CardDescription>
+                <CardTitle>Add New Resource</CardTitle>
+                <CardDescription>Create a new educational resource or article</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResourceForm 
-                  resource={editingResource} 
-                  onSaved={handleResourceSaved} 
-                  onCancel={() => {
-                    setAddingResource(false);
-                    setEditingResource(null);
-                  }}
-                />
+                <ResourceForm resource={null} onSaved={handleResourceSaved} onCancel={() => setAddingResource(false)} />
               </CardContent>
             </Card>
           )}
 
           {isLoadingResources ? (
             <div className="space-y-4">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <Card key={i}>
                   <CardHeader>
                     <Skeleton className="h-6 w-48" />
@@ -206,32 +202,47 @@ const AdminPanel = () => {
                 </Card>
               ))}
             </div>
-          ) : resources && resources.length > 0 ? (
+          ) : resources.length > 0 ? (
             <div className="space-y-4">
-              {resources.map(resource => (
-                <Card key={resource.id}>
-                  <CardHeader className="py-4">
-                    <div className="flex justify-between items-start">
+              {resources.map((res) => (
+                <React.Fragment key={res.id}>
+                  <Card>
+                    <CardHeader className="py-4 flex justify-between items-center">
                       <div>
-                        <CardTitle>{resource.title}</CardTitle>
+                        <CardTitle>{res.title}</CardTitle>
                         <CardDescription>
-                          Category: {resource.category} | 
-                          Author: {resource.authorName}
+                          Category: {res.category} | Author: {res.authorName}
                         </CardDescription>
                       </div>
-                      <Button 
+                      <Button
                         variant="outline"
                         onClick={() => {
                           setAddingResource(false);
-                          setEditingResource(resource);
+                          setEditingResource(res);
                         }}
                         disabled={addingResource || !!editingResource}
                       >
                         Edit
                       </Button>
-                    </div>
-                  </CardHeader>
-                </Card>
+                    </CardHeader>
+                  </Card>
+
+                  {/* Inline edit form for this resource */}
+                  {editingResource?.id === res.id && (
+                    <Card className="mt-2">
+                      <CardHeader>
+                        <CardTitle>Edit Resource</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResourceForm
+                          resource={editingResource}
+                          onSaved={handleResourceSaved}
+                          onCancel={() => setEditingResource(null)}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           ) : (
