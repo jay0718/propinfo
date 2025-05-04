@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -30,7 +31,9 @@ export const propFirms = pgTable("prop_firms", {
   featured: boolean("featured").default(false).notNull(),
   avgRating: doublePrecision("avg_rating"),
   ratingCount: integer("rating_count").default(0).notNull(),
-  extra: json("extra").$type<Record<string, any>>().default("{}"),
+  extra: json("extra")
+  .$type<Record<string, any>>()
+  .default(sql`'{}'`),  
 });
 
 export const insertPropFirmSchema = createInsertSchema(propFirms).omit({
