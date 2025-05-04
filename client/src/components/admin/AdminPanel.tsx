@@ -66,6 +66,7 @@ const AdminPanel = () => {
           <TabsTrigger value="resources">Manage Resources</TabsTrigger>
         </TabsList>
 
+        {/* ——— Firms Tab ——— */}
         <TabsContent value="firms" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Prop Firms</h2>
@@ -127,9 +128,6 @@ const AdminPanel = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle>{firm.name}</CardTitle>
-                        <CardDescription>
-                          Profit Split: {firm.profitSplit}%
-                        </CardDescription>
                       </div>
                       <Button 
                         variant="outline"

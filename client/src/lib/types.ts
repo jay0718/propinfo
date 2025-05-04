@@ -62,33 +62,33 @@ export interface AccountType {
   positionClosureDueTime?: string;
 
   /** ——— remaining firm‐level settings ——— */
-  newsTradingAllowed: boolean;
+  newsTradingAllowed?: boolean;
   newsTradingAllowedCondition?: string;
 
-  DCAAllowed: boolean;
+  DCAAllowed?: boolean;
   DCACondition?: string;
 
-  maxTrailingAllowed: boolean;
+  maxTrailingAllowed?: boolean;
   maxTrailingCondition?: string;
 
-  microScalpingAllowed: boolean;
+  microScalpingAllowed?: boolean;
   microScalpingCondition?: string;
   
-  maxAccountsPerTrader: number;
+  maxAccountsPerTrader?: number;
   maxAccountsPerTraderCondition?: string;
 
-  maxContractsPerTrade: number;
+  maxContractsPerTrade?: number;
 
-  copyTradingAllowed: boolean;
+  copyTradingAllowed?: boolean;
   copyTradingCondition?: string;
 
-  scalingPlan: boolean;
+  scalingPlan?: boolean;
   scalingPlanCondition?: string;
 
-  algoTradingAllowed: boolean;
+  algoTradingAllowed?: boolean;
   algoTradingCondition?: string;
 
-  resetAllowed: boolean;
+  resetAllowed?: boolean;
   resetCondition?: string;
   resetPrice?: number;
   resetLimit?: number;
@@ -122,9 +122,9 @@ export interface AccountType {
   marketDepthDataLevel?: string;
 
   /** Company‐wide profit split */
-  hasProfitSplitChange: boolean;
-  initialProfitSplit: number;
-  finalProfitSplit: number;
+  hasProfitSplitChange?: boolean;
+  initialProfitSplit?: number;
+  finalProfitSplit?: number;
   profitSplitCondition?: string;
 }
 

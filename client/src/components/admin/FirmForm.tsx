@@ -24,62 +24,97 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PropFirm } from '@/lib/types';
+import { PropFirm } from '@shared/schema';
 
 // Schema for one account offering
 const accountTypeSchema = z.object({
+  accountType: z.enum(['Challenge','Funding','Live','InstantFunded']),
+  stage: z.coerce.number().int().optional(),
+  referralCode: z.string().optional(),
   accountSize: z.coerce.number().int().positive(),
-  drawdownType: z.enum(['EOD', 'EOT', 'TMDD']),
-  price: z.coerce.number().nonnegative(),
-  currentDiscountRate: z.coerce.number().min(0).max(100),
-  discountedPrice: z.coerce.number().nonnegative(),
-  activationFee: z.coerce.number().nonnegative(),
-  targetProfit: z.coerce.number().nonnegative(),
-  MLL: z.coerce.number().nonnegative(),
-  DLL: z.coerce.number().nonnegative(),
-  minEvaluationDays: z.coerce.number().int().nonnegative(),
-  minFundedDays: z.coerce.number().int().nonnegative(),
-  payoutRatio: z.coerce.number().min(0).max(100),
-  payoutFrequency: z.string(),
+  startingBalance: z.coerce.number().optional(),
+  drawdownType: z.enum(['EOD','EOT','TMDD','Static']),
+  price: z.coerce.number().nonnegative().default(0),
+  currentDiscountRate: z.coerce.number().min(0).max(100).default(0),
+  discountedPrice: z.coerce.number().nonnegative().optional(),
+  activationFee: z.coerce.number().nonnegative().optional(),
+  targetProfit: z.coerce.number().int().nonnegative(),
+  MLL: z.coerce.number().nonnegative().optional(),
+  DLLExists: z.boolean().optional(),
+  DLL: z.coerce.number().nonnegative().optional(),
+  payoutRatio: z.coerce.number().min(0).max(1).optional(),
+  payoutFrequency: z.string().optional(),
+  tradableAssets: z.array(z.string()).optional(),
+  miniTradingFee: z.coerce.number().optional(),
+  microTradingFee: z.coerce.number().optional(),
+  positionClosureDueTime: z.string().optional(),
+
+  // all the toggles and conditions
+  newsTradingAllowed: z.boolean().optional(),
+  newsTradingAllowedCondition: z.string().optional(),
+  DCAAllowed: z.boolean().optional(),
+  DCACondition: z.string().optional(),
+  maxTrailingAllowed: z.boolean().optional(),
+  maxTrailingCondition: z.string().optional(),
+  microScalpingAllowed: z.boolean().optional(),
+  microScalpingCondition: z.string().optional(),
+  maxAccountsPerTrader: z.coerce.number().int().nonnegative().optional(),
+  maxAccountsPerTraderCondition: z.string().optional(),
+  maxContractsPerTrade: z.coerce.number().int().nonnegative().optional(),
+  copyTradingAllowed: z.boolean().optional(),
+  copyTradingCondition: z.string().optional(),
+  scalingPlan: z.boolean().optional(),
+  scalingPlanCondition: z.string().optional(),
+  algoTradingAllowed: z.boolean().optional(),
+  algoTradingCondition: z.string().optional(),
+  resetAllowed: z.boolean().optional(),
+  resetCondition: z.string().optional(),
+  resetPrice: z.coerce.number().optional(),
+  resetLimit: z.coerce.number().optional(),
+  resetLimitCondition: z.string().optional(),
+  resetDiscount: z.coerce.number().optional(),
+  resetDiscountedPrice: z.coerce.number().optional(),
+  maxWithdrawal: z.coerce.number().optional(),
+  withdrawalPlatform: z.array(z.string()).optional(),
+  bufferInsideWithdrawalAllowed: z.boolean().optional(),
+  bufferAmount: z.coerce.number().optional(),
+  bufferInsideCondition: z.string().optional(),
+  consistencyRule: z.boolean().optional(),
+  consistencyRatio: z.coerce.number().min(0).max(100).optional(),
+  consistencyCondition: z.string().optional(),
+  minTradingDays: z.coerce.number().int().nonnegative().optional(),
+  minTradingDaysCondition: z.string().optional(),
+  MaximumInactiveDays: z.coerce.number().int().nonnegative().optional(),
+  liveAccountCondition: z.string().optional(),
+  marketDepthData: z.boolean().optional(),
+  marketDepthDataLevel: z.string().optional(),
+  hasProfitSplitChange: z.boolean().optional(),
+  initialProfitSplit: z.coerce.number().min(0).max(100).optional(),
+  finalProfitSplit: z.coerce.number().min(0).max(100).optional(),
+  profitSplitCondition: z.string().optional().optional(),
 });
 
-type AccountType = z.infer<typeof accountTypeSchema>;
-
 // Schema for extra fields
-const extraFieldSchema = z
+const extraSchema = z
   .array(z.object({ key: z.string().min(1), value: z.string().min(1) }))
   .optional();
 
 // Main form schema
 const firmSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
+  name: z.string().min(2),
   logo: z.string().optional(),
+  backgroundImage: z.string().optional(),
   description: z.string().min(20),
-  websiteUrl: z.string().url({ message: "Must be a valid URL" }).optional().or(z.literal('')),
-  profitSplit: z.coerce.number().int().min(1).max(100, { message: "Must be between 1 and 100" }),
-  challengeFeeMin: z.coerce.number().nonnegative(),
-  challengeFeeMax: z.coerce.number().nonnegative(),
-  payoutTime: z.coerce.number().int().nonnegative(),
-  maxDailyDrawdown: z.coerce.number().int().nonnegative(),
-  maxTotalDrawdown: z.coerce.number().int().nonnegative(),
-  minTradingDays: z.coerce.number().int().nonnegative(),
-  scalingPlan: z.boolean(),
+  websiteUrl: z.string().url().optional().or(z.literal('')),
+  minPayoutTime: z.coerce.number().int().optional(),
+  payoutWindow: z.string().optional(),
+  tradingPlatforms: z.array(z.string()).min(1),
+  tradableAssets: z.array(z.string()).min(1),
   featured: z.boolean().default(false),
-
   accountTypes: z.array(accountTypeSchema).min(1),
-  tradingPlatforms: z.array(z.string()).min(1, { message: "Select at least one trading platform" }),
-  tradableAssets: z.array(z.string()).min(1, { message: "Select at least one tradable asset" }),
-  evaluationStages: z.array(z.string()).optional(),
-  newsTradingAllowed: z.boolean(),
-  DCAAllowed: z.boolean(),
-  maxTrailingAllowed: z.boolean(),
-  microScalpingAllowed: z.boolean(),
-  maxAccountsPerTrader: z.coerce.number().int().nonnegative(),
-  maxContractsPerTrade: z.coerce.number().int().nonnegative(),
-  copyTradingAllowed: z.boolean(),
-  consistencyEval: z.coerce.number().min(0).max(100),
-  consistencyFunded: z.coerce.number().min(0).max(100),
-  extraFields: extraFieldSchema,
+  extra: z
+  .array(z.object({ key: z.string(), value: z.string() }))
+  .default([]),
 });
 
 type FirmFormValues = z.infer<typeof firmSchema>;
@@ -141,48 +176,32 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
     defaultValues: {
       name: firm?.name || '',
       logo: firm?.logo || '',
+      backgroundImage: firm?.backgroundImage || '',
       description: firm?.description || '',
       websiteUrl: firm?.websiteUrl || '',
-      profitSplit: firm?.profitSplit || 80,
-      challengeFeeMin: firm?.challengeFeeMin || 0,
-      challengeFeeMax: firm?.challengeFeeMax || 0,
-      payoutTime: firm?.payoutTime || 0,
-      maxDailyDrawdown: firm?.maxDailyDrawdown || 0,
-      maxTotalDrawdown: firm?.maxTotalDrawdown || 0,
-      minTradingDays: firm?.minTradingDays || 0,
-      scalingPlan: firm?.scalingPlan || false,
-      featured: firm?.featured || false,
-      accountTypes:
-        firm?.accountTypes || [
-          {
-            accountSize: 50000,
-            drawdownType: 'EOD',
-            price: 0,
-            currentDiscountRate: 0,
-            discountedPrice: 0,
-            activationFee: 0,
-            targetProfit: 0,
-            MLL: 0,
-            DLL: 0,
-            minEvaluationDays: 0,
-            minFundedDays: 0,
-            payoutRatio: 0,
-            payoutFrequency: '',
-          },
-        ],
+      minPayoutTime: firm?.minPayoutTime || 0,
+      payoutWindow: firm?.payoutWindow || '',
       tradingPlatforms: firm?.tradingPlatforms || [],
       tradableAssets: firm?.tradableAssets || [],
-      evaluationStages: firm?.evaluationStages || [''],
-      newsTradingAllowed: firm?.newsTradingAllowed || false,
-      DCAAllowed: firm?.DCAAllowed || false,
-      maxTrailingAllowed: firm?.maxTrailingAllowed || false,
-      microScalpingAllowed: firm?.microScalpingAllowed || false,
-      maxAccountsPerTrader: firm?.maxAccountsPerTrader || 1,
-      maxContractsPerTrade: firm?.maxContractsPerTrade || 1,
-      copyTradingAllowed: firm?.copyTradingAllowed || false,
-      consistencyEval: firm?.consistencyEval || 40,
-      consistencyFunded: firm?.consistencyFunded || 40,
-      extraFields: normalizedExtra,
+      featured: firm?.featured || false,
+      accountTypes: firm?.accountTypes || [
+        {
+          accountSize: 50000,
+          drawdownType: 'EOD',
+          price: 0,
+          currentDiscountRate: 0,
+          discountedPrice: 0,
+          activationFee: 0,
+          targetProfit: 0,
+          MLL: 0,
+          DLL: 0,
+          minEvaluationDays: 0,
+          minFundedDays: 0,
+          payoutRatio: 0,
+          payoutFrequency: '',
+        },
+      ],
+      extra: normalizedExtra || {},
     },
   });
 
@@ -204,18 +223,11 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
     }, [price, rate, idx])
   })
 
-
   const {
-    fields: stageFields,
-    append: appendStage,
-    remove: removeStage,
-  } = useFieldArray({ control: form.control, name: 'evaluationStages' });
-
-  const {
-    fields: extraFields,
+    fields: extra,
     append: appendExtra,
     remove: removeExtra,
-  } = useFieldArray({ control: form.control, name: 'extraFields' });
+  } = useFieldArray({ control: form.control, name: 'extra' });
 
   const { mutate: createFirm, isPending: isCreating } = useMutation({
     mutationFn: (data: FirmFormValues) => {
@@ -287,6 +299,32 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
           />
           <FormField
             control={form.control}
+            name="backgroundImage"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Background Image</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Background Image Link" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="logo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Logo Image</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Logo Image Link" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="websiteUrl"
             render={({ field }) => (
               <FormItem>
@@ -312,9 +350,8 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
             </FormItem>
           )}
         />
-
-                {/* Account Types */}
-                <section>
+        {/* Account Types */}
+        <section>
           <h3 className="text-lg font-medium">Account Types</h3>
           <div className="space-y-4">
             {accountFields.map((acct, idx) => (
@@ -356,6 +393,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                               <SelectItem value="EOD">EOD</SelectItem>
                               <SelectItem value="EOT">EOT</SelectItem>
                               <SelectItem value="TMDD">TMDD</SelectItem>
+                              <SelectItem value="TMDD">Static</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -464,34 +502,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                       </FormItem>
                     )}
                   />
-                  {/* Min Evaluation Days */}
-                  <FormField
-                    control={form.control}
-                    name={`accountTypes.${idx}.minEvaluationDays`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Min Eval Days</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {/* Min Funded Days */}
-                  <FormField
-                    control={form.control}
-                    name={`accountTypes.${idx}.minFundedDays`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Min Funded Days</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   {/* Payout Ratio */}
                   <FormField
                     control={form.control}
@@ -528,6 +538,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               type="button"
               onClick={() =>
                 appendAccount({
+                  accountType: 'Challenge',
                   accountSize: 0,
                   drawdownType: 'EOD',
                   price: 0,
@@ -537,8 +548,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                   targetProfit: 0,
                   MLL: 0,
                   DLL: 0,
-                  minEvaluationDays: 0,
-                  minFundedDays: 0,
                   payoutRatio: 0,
                   payoutFrequency: '',
                 })
@@ -643,31 +652,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
           />
         </div>
 
-        {/* Evaluation Stages */}
-        <section>
-          <h3 className="text-lg font-medium">Evaluation Stages</h3>
-          <div className="space-y-2">
-            {stageFields.map((st, idx) => (
-              <div key={st.id} className="flex items-center gap-2">
-                <FormField
-                  control={form.control}
-                  name={`evaluationStages.${idx}`}
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormControl>
-                        <Input {...field} placeholder="Stage name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button variant="ghost" onClick={() => removeStage(idx)}>Remove</Button>
-              </div>
-            ))}
-            <Button type="button" onClick={() => appendStage('')}>+ Add Stage</Button>
-          </div>
-        </section>
-
         {/* Toggles & Flags */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
@@ -694,75 +678,15 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
           ))}
         </div>
 
-        {/* Numeric Limits */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="maxAccountsPerTrader"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Accounts/Trader</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="maxContractsPerTrade"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Contracts/Trade</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Consistency Rules */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="consistencyEval"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Consistency (Eval) %</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} step={0.01} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="consistencyFunded"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Consistency (Funded) %</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} step={0.01} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
         {/* Extra Key-Value Rules */}
         <section>
           <h3 className="text-lg font-medium">Extra Rules</h3>
           <div className="space-y-2">
-            {extraFields.map((ef, idx) => (
+            {extra.map((ef, idx) => (
               <div key={ef.id} className="flex gap-2 items-center">
                 <FormField
                   control={form.control}
-                  name={`extraFields.${idx}.key`}
+                  name={`extra.${idx}.key`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <FormControl>
@@ -774,7 +698,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                 />
                 <FormField
                   control={form.control}
-                  name={`extraFields.${idx}.value`}
+                  name={`extra.${idx}.value`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <FormControl>
