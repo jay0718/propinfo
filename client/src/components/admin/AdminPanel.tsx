@@ -207,23 +207,25 @@ const AdminPanel = () => {
               {resources.map((res) => (
                 <React.Fragment key={res.id}>
                   <Card>
-                    <CardHeader className="py-4 flex justify-between items-center">
-                      <div>
-                        <CardTitle>{res.title}</CardTitle>
-                        <CardDescription>
-                          Category: {res.category} | Author: {res.authorName}
-                        </CardDescription>
+                    <CardHeader className="py-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{res.title}</CardTitle>
+                          <CardDescription>
+                            Category: {res.category} | Author: {res.authorName}
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAddingResource(false);
+                            setEditingResource(res);
+                          }}
+                          disabled={addingResource || !!editingResource}
+                        >
+                          Edit
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setAddingResource(false);
-                          setEditingResource(res);
-                        }}
-                        disabled={addingResource || !!editingResource}
-                      >
-                        Edit
-                      </Button>
                     </CardHeader>
                   </Card>
 

@@ -32,11 +32,14 @@ export interface AccountType {
   /** Price after discount */
   discountedPrice?: number;
 
+  /** Discount ends at */
+  discountEndAt?: string;
+
   /** Activation fee */
   activationFee?: number;
 
   /** Target profit (절대값, e.g. 10000) */
-  targetProfit: number;
+  targetProfit?: number;
 
   /** Maximum Loss Limit */
   MLL?: number;

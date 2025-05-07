@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
@@ -30,7 +30,7 @@ import { PropFirm } from '@shared/schema';
 const accountTypeSchema = z.object({
   accountType: z.enum(['Challenge','Funding','Live','InstantFunded']),
   stage: z.coerce.number().int().optional(),
-  referralCode: z.string().optional(),
+  referralCode: z.string().default('PROPKOREA'),
   accountSize: z.coerce.number().int().positive(),
   startingBalance: z.coerce.number().optional(),
   drawdownType: z.enum(['EOD','EOT','TMDD','Static']),
@@ -38,7 +38,7 @@ const accountTypeSchema = z.object({
   currentDiscountRate: z.coerce.number().min(0).max(100).default(0),
   discountedPrice: z.coerce.number().nonnegative().optional(),
   activationFee: z.coerce.number().nonnegative().optional(),
-  targetProfit: z.coerce.number().int().nonnegative(),
+  targetProfit: z.coerce.number().int().nonnegative().optional(),
   MLL: z.coerce.number().nonnegative().optional(),
   DLLExists: z.boolean().optional(),
   DLL: z.coerce.number().nonnegative().optional(),
@@ -92,6 +92,7 @@ const accountTypeSchema = z.object({
   initialProfitSplit: z.coerce.number().min(0).max(100).optional(),
   finalProfitSplit: z.coerce.number().min(0).max(100).optional(),
   profitSplitCondition: z.string().optional().optional(),
+  discountEndAt: z.string().optional(),
 });
 
 // Schema for extra fields
@@ -199,6 +200,8 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
           minFundedDays: 0,
           payoutRatio: 0,
           payoutFrequency: '',
+          referralCode: 'PROPKOREA',
+          discountEndAt: '',
         },
       ],
       extra: normalizedExtra || {},
@@ -212,16 +215,35 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
     remove: removeAccount,
   } = useFieldArray({ control: form.control, name: 'accountTypes' });
 
-  // For each account row we’ll watch price & rate and update discountedPrice:
-  accountFields.forEach((_, idx) => {
-    const price = watch(`accountTypes.${idx}.price`)
-    const rate  = watch(`accountTypes.${idx}.currentDiscountRate`)
-    useEffect(() => {
-      const computed = +(price * (1 - rate/100)).toFixed(2)
-      // only call setValue if it actually changed:
-      setValue(`accountTypes.${idx}.discountedPrice`, computed, { shouldValidate: true })
-    }, [price, rate, idx])
-  })
+  // 1) Watch the entire array at once
+  const accountTypes = useWatch({
+    control: form.control,
+    name: 'accountTypes',
+  }) as Array<{
+    price?: number;
+    currentDiscountRate?: number;
+    discountedPrice?: number;
+  }>;
+
+  // 2) One effect to recalc *all* discountedPrice fields
+  useEffect(() => {
+    accountTypes.forEach((acct, idx) => {
+      const price = acct.price ?? 0;
+      const rate  = acct.currentDiscountRate ?? 0;
+      const computed = +(price * (1 - rate/100)).toFixed(2);
+
+      // avoid infinite loops
+      if (computed !== acct.discountedPrice) {
+        form.setValue(
+          `accountTypes.${idx}.discountedPrice`,
+          computed,
+          { shouldValidate: true }
+        );
+      }
+    });
+  }, [accountTypes, form]);
+
+  const accountTypesValues = watch('accountTypes') as Array<{ currentDiscountRate?: number }>;
 
   const {
     fields: extra,
@@ -336,6 +358,32 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="payoutWindow"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payout Window</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Payout Window" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="minPayoutTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Minimum Payout Days</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Minimum Payout Days" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
         <FormField
           control={form.control}
@@ -368,6 +416,27 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                   {/* Size */}
                   <FormField
                     control={form.control}
+                    name={`accountTypes.${idx}.accountType`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account Type ($)</FormLabel>
+                        <FormControl>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Challenge">Challenge</SelectItem>
+                              <SelectItem value="Funding">Funding</SelectItem>
+                              <SelectItem value="Live">Live</SelectItem>
+                              <SelectItem value="InstantFunded">Instant Funded</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
                     name={`accountTypes.${idx}.accountSize`}
                     render={({ field }) => (
                       <FormItem>
@@ -393,7 +462,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                               <SelectItem value="EOD">EOD</SelectItem>
                               <SelectItem value="EOT">EOT</SelectItem>
                               <SelectItem value="TMDD">TMDD</SelectItem>
-                              <SelectItem value="TMDD">Static</SelectItem>
+                              <SelectItem value="Static">Static</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -410,6 +479,20 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                         <FormLabel>Price ($)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Referral Code */}
+                  <FormField
+                    control={form.control}
+                    name={`accountTypes.${idx}.referralCode`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Referral Code</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Referral Code" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -446,34 +529,54 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                       </FormItem>
                     )}
                   />
+                  {/* Discount Ends At — only if rate ≠ 0 */}
+                  {watch(`accountTypes.${idx}.currentDiscountRate`)! > 0 && (
+                    <FormField
+                      control={form.control}
+                      name={`accountTypes.${idx}.discountEndAt`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Discount Ends At</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="date" className="max-w-[140px]" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   {/* Activation Fee */}
-                  <FormField
-                    control={form.control}
-                    name={`accountTypes.${idx}.activationFee`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Activation Fee ($)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {watch(`accountTypes.${idx}.accountType`) === "Challenge" && (
+                    <FormField
+                      control={form.control}
+                      name={`accountTypes.${idx}.activationFee`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Activation Fee ($)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   {/* Target Profit */}
-                  <FormField
-                    control={form.control}
-                    name={`accountTypes.${idx}.targetProfit`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Target Profit ($)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {watch(`accountTypes.${idx}.accountType`) === "Challenge" && (
+                    <FormField
+                      control={form.control}
+                      name={`accountTypes.${idx}.targetProfit`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Profit ($)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   {/* MLL */}
                   <FormField
                     control={form.control}
@@ -550,6 +653,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                   DLL: 0,
                   payoutRatio: 0,
                   payoutFrequency: '',
+                  referralCode: 'PROPKOREA',
                 })
               }
             >
@@ -605,51 +709,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="tradableAssets"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tradable Assets</FormLabel>
-                <div className="flex flex-wrap gap-2">
-                  {tradableAssetOptions.map((asset) => (
-                    <FormField
-                      key={asset}
-                      control={form.control}
-                      name="tradableAssets"
-                      render={({ field }) => {
-                        return (
-                          <FormItem
-                            key={asset}
-                            className="flex flex-row items-start space-x-2 space-y-0"
-                          >
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(asset)}
-                                onCheckedChange={(checked) => {
-                                  return checked
-                                    ? field.onChange([...field.value, asset])
-                                    : field.onChange(
-                                        field.value?.filter(
-                                          (value) => value !== asset
-                                        )
-                                      )
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal cursor-pointer">
-                              {asset}
-                            </FormLabel>
-                          </FormItem>
-                        )
-                      }}
-                    />
-                  ))}
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </div>
 
         {/* Toggles & Flags */}
@@ -676,6 +735,22 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
               )}
             />
           ))}
+          <FormField
+              control={form.control}
+              name="featured"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal cursor-pointer">Featured Firm</FormLabel>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
         </div>
 
         {/* Extra Key-Value Rules */}
