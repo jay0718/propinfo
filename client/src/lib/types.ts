@@ -22,6 +22,7 @@ export interface AccountType {
 
   /** Drawdown Type: End-Of-Day | End-Of-Test | Trailing Max Daily Drawdown */
   drawdownType: 'EOD' | 'EOT' | 'TMDD' | 'Static';
+  accountName?: string;
 
   /** Original price (원가) */
   price?: number;
@@ -137,6 +138,7 @@ export interface PropFirm {
   name: string;
   logo?: string;
   backgroundImage?: string;
+  shortDescription: string;
   description: string;
   websiteUrl?: string;
 
