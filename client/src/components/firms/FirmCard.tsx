@@ -1,8 +1,7 @@
 import React from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
-import { useQuery } from '@tanstack/react-query';
-import type { PropFirm, AccountType } from '@/lib/types';
+import type { PropFirm } from '@/lib/types';
 
 interface FirmCardProps {
   firm: PropFirm;
@@ -14,134 +13,84 @@ export default function FirmCard({ firm }: FirmCardProps) {
     name,
     logo,
     backgroundImage,
-    shortDescription,
     websiteUrl,
-    minPayoutTime,
     accountTypes = [],
   } = firm;
 
-  // pull out only the 50k “Challenge” accounts
+  console.log(firm)
+
   const challenges = accountTypes.filter(
     (ac) => ac.accountType === 'Challenge' && ac.accountSize === 50000
   );
 
-  // find cheapest (prefers discountedPrice over price)
-  const cheapestValue = challenges.reduce<number | null>((min, ac) => {
-    const val = ac.discountedPrice ?? ac.price;
-    if (val == null) return min;
-    return min === null ? val : Math.min(min, val);
+  const cheapest = challenges.reduce<null | typeof challenges[0]>((min, ac) => {
+    const price = ac.discountedPrice ?? ac.price ?? Infinity;
+    if (!min) return ac;
+    const minPrice = min.discountedPrice ?? min.price ?? Infinity;
+    return price < minPrice ? ac : min;
   }, null);
 
-  const selected = challenges.find(
-    (ac) => (ac.discountedPrice ?? ac.price) === cheapestValue
-  );
+  if (!cheapest) return null;
 
-  const originalPrice = selected?.price ?? null;
-  const discountedPrice = selected?.discountedPrice ?? null;
-  const discountPct =
-    selected?.currentDiscountRate != null
-      ? Math.round(selected.currentDiscountRate)
-      : null;
-  const discountEnds = selected?.discountEndAt
-    ? new Date(selected.discountEndAt).toLocaleDateString()
+  const originalPrice = cheapest.price ?? 0;
+  const discountedPrice = cheapest.discountedPrice ?? originalPrice;
+  const discountPct = cheapest.currentDiscountRate != null
+    ? Math.round(cheapest.currentDiscountRate)
     : null;
-  const activationFee = selected?.activationFee ?? null;
-  const referralCode = selected?.referralCode ?? null;
+  const activationFee = cheapest.activationFee ?? 0;
+  const discountEnd = cheapest.discountEndAt
+    ? new Date(cheapest.discountEndAt).toLocaleDateString()
+    : '—';
+  const couponCode = cheapest.referralCode ?? '';
 
   return (
-    <div className="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition p-4">
       {backgroundImage && (
         <div
-          className="h-32 bg-center bg-cover"
+          className="h-24 bg-center bg-cover rounded-lg mb-4"
           style={{ backgroundImage: `url(${backgroundImage})` }}
         />
       )}
 
-      <div className="p-5 flex flex-col h-full">
-        {/* --- header (logo + name) --- */}
-        <div className="flex items-center space-x-3">
-          <img
-            src={logo}
-            alt={`${name} logo`}
-            className="h-10 w-10 object-contain"
-          />
-          <h3 className="text-xl font-semibold text-neutral-900">{name}</h3>
+      <div className="flex items-center mb-4">
+        <img src={logo} alt={name} className="h-10 w-10 rounded-full mr-3" />
+        <h2 className="text-lg font-semibold">{name}</h2>
+      </div>
+
+      <div className="mb-4">
+        <p className="text-sm text-neutral-500 mb-1">50k Challenge Price</p>
+        <div className="flex items-center">
+          {originalPrice !== discountedPrice && (
+            <span className="text-neutral-400 line-through mr-2 text-sm">
+              ${originalPrice}
+            </span>
+          )}
+          <span className="text-2xl font-bold">${discountedPrice}</span>
+          {/* {discountPct !== null && (
+            <span className="ml-2 bg-blue-100 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full">
+              {discountPct}%
+            </span>
+          )} */}
         </div>
-
-        {/* --- short description --- */}
-        <p className="mt-3 text-sm text-neutral-600 line-clamp-3">
-          {shortDescription}
-        </p>
-
-        {/* --- discount hero (strike + new price + badge) --- */}
-        {discountedPrice != null && discountPct != null && (
-          <>
-            <dt className="text-neutral-500">50k Account Price</dt>
-            <dd>
-              <div className="flex items-center gap-2">
-                {originalPrice != null && (
-                  <span className="align-middle text-lg text-neutral-400 line-through">
-                    ${originalPrice.toLocaleString()}
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="align-middle text-3xl font-bold text-neutral-900">
-                    ${discountedPrice.toLocaleString()}
-                  </span>
-                  <span className="inline-flex items-center justify-center align-middle rounded-full bg-blue-50 text-primary-500 text-s font-semibold px-2.5 py-1.5 leading-none">
-                    {discountPct}%
-                  </span>
-                </div>
-              </div>
-              {/* --- coupon code pill --- */}
-              {referralCode && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-neutral-500">Coupon Code:</span>
-                  <span className="inline-block bg-neutral-100 text-sm font-mono font-semibold px-3 py-1 rounded">
-                    {referralCode}
-                  </span>
-                </div>
-              )}
-            </dd>
-          </>
+        {couponCode && (
+          <div className="mt-2 text-xs">
+            Coupon: <span className="font-mono bg-neutral-100 px-2 py-0.5 rounded">{couponCode}</span>
+          </div>
         )}
+      </div>
 
+      <div className="text-xs text-neutral-500 space-y-1 mb-4">
+        <div>Activation Fee: ${activationFee}</div>
+        <div>Discount Ends: {discountEnd}</div>
+      </div>
 
-        {/* --- other metadata grid --- */}
-        <div className="mt-3 grid grid-cols-2 gap-4 text-sm text-neutral-700 flex-1">
-          <div>
-            <dt className="text-neutral-500">Activation Fee</dt>
-            <dd className="font-medium">
-              {activationFee != null
-                ? `$${activationFee.toLocaleString()}`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-neutral-500">Discount Ends</dt>
-            <dd className="font-medium">{discountEnds ?? '—'}</dd>
-          </div>
-          {/* add more rows here if you need them */}
-        </div>
-
-        {/* --- buttons --- */}
-        <div className="mt-6 space-y-2">
-          <a
-            href={websiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block"
-          >
-            <Button variant="outline" className="w-full">
-              Visit Site
-            </Button>
-          </a>
-          <Link href={`/firms/${id}`} className="block">
-            <Button variant="default" className="w-full">
-              View Details
-            </Button>
-          </Link>
-        </div>
+      <div className="flex flex-col space-y-2">
+        <a href={websiteUrl} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" className="w-full text-sm">Visit Site</Button>
+        </a>
+        <Link href={`/firms/${id}`}>
+          <Button className="w-full text-sm">View Details</Button>
+        </Link>
       </div>
     </div>
   );

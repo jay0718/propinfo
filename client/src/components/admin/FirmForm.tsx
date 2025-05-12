@@ -35,7 +35,7 @@ const accountTypeSchema = z.object({
   startingBalance: z.coerce.number().optional(),
   drawdownType: z.enum(['EOD','EOT','TMDD','Static']),
   price: z.coerce.number().nonnegative().default(0),
-  currentDiscountRate: z.coerce.number().min(0).max(100).default(0),
+  currentDiscountRate: z.coerce.number().min(0).max(100).optional(),
   discountedPrice: z.coerce.number().nonnegative().optional(),
   activationFee: z.coerce.number().nonnegative().optional(),
   targetProfit: z.coerce.number().int().nonnegative().optional(),
@@ -187,6 +187,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
       featured: firm?.featured || false,
       accountTypes: firm?.accountTypes || [
         {
+          accountType: 'Challenge',
           accountSize: 50000,
           drawdownType: 'EOD',
           price: 0,
@@ -196,15 +197,13 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
           targetProfit: 0,
           MLL: 0,
           DLL: 0,
-          minEvaluationDays: 0,
-          minFundedDays: 0,
           payoutRatio: 0,
           payoutFrequency: '',
           referralCode: 'PROPKOREA',
           discountEndAt: '',
         },
       ],
-      extra: normalizedExtra || {},
+      extra: normalizedExtra || [],
     },
   });
 
@@ -215,7 +214,6 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
     remove: removeAccount,
   } = useFieldArray({ control: form.control, name: 'accountTypes' });
 
-  // 1) Watch the entire array at once
   const accountTypes = useWatch({
     control: form.control,
     name: 'accountTypes',
@@ -225,23 +223,27 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
     discountedPrice?: number;
   }>;
 
-  // 2) One effect to recalc *all* discountedPrice fields
   useEffect(() => {
     accountTypes.forEach((acct, idx) => {
-      const price = acct.price ?? 0;
-      const rate  = acct.currentDiscountRate ?? 0;
-      const computed = +(price * (1 - rate/100)).toFixed(2);
-
-      // avoid infinite loops
-      if (computed !== acct.discountedPrice) {
-        form.setValue(
-          `accountTypes.${idx}.discountedPrice`,
-          computed,
-          { shouldValidate: true }
-        );
+      const rate = acct.currentDiscountRate
+      // only recalc when rate is a non‑empty string or a number
+      if (rate !== '' && rate != null) {
+        // coerce to number in case it's a string like "25"
+        const pct = Number(rate)
+        if (!Number.isNaN(pct)) {
+          const price    = acct.price ?? 0
+          const computed = +(price * (1 - pct/100)).toFixed(2)
+          if (computed !== acct.discountedPrice) {
+            setValue(
+              `accountTypes.${idx}.discountedPrice`,
+              computed,
+              { shouldValidate: true }
+            )
+          }
+        }
       }
-    });
-  }, [accountTypes, form]);
+    })
+  }, [accountTypes, setValue])
 
   const accountTypesValues = watch('accountTypes') as Array<{ currentDiscountRate?: number }>;
 
@@ -253,9 +255,11 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
 
   const { mutate: createFirm, isPending: isCreating } = useMutation({
     mutationFn: (data: FirmFormValues) => {
+      console.log('Creating firm:', data);
       return apiRequest('POST', '/api/firms', data);
     },
     onSuccess: () => {
+      console.log('Success');
       toast({
         title: "Success",
         description: "Prop firm added successfully",
@@ -263,6 +267,7 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
       onSaved();
     },
     onError: () => {
+      console.log('Error');
       toast({
         title: "Error",
         description: "Failed to add prop firm",
@@ -303,7 +308,11 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit,
+    (errors) => {
+      console.error("Validation errors:", errors);
+    }
+  )} className="space-y-8">
         {/* Basic Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
@@ -506,7 +515,16 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                       <FormItem>
                         <FormLabel>Discount Rate (0–100)</FormLabel>
                         <FormControl>
-                          <Input step="1" type="number" {...field} />
+                        <Input
+                          type="number"
+                          step={1}
+                          value={field.value ?? ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            field.onChange(v === '' ? '' : +v)
+                          }}
+                          placeholder="e.g. 20"
+                        />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -520,17 +538,26 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                       <FormItem>
                         <FormLabel>Discounted Price ($)</FormLabel>
                         <FormControl>
-                          <Input
-                            {...field}
-                            readOnly
-                          />
+                        <Input
+                        {...field} 
+                        type="number"
+                        placeholder="Enter discounted price"
+                        />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   {/* Discount Ends At — only if rate ≠ 0 */}
-                  {watch(`accountTypes.${idx}.currentDiscountRate`)! > 0 && (
+                  {(
+                    // rate > 0
+                    (watch(`accountTypes.${idx}.currentDiscountRate`) ?? 0) > 0
+                    ||
+                    // or discountedPrice differs from price
+                    (watch(`accountTypes.${idx}.discountedPrice`) ?? 0)
+                      !==
+                    (watch(`accountTypes.${idx}.price`) ?? 0)
+                  ) && (
                     <FormField
                       control={form.control}
                       name={`accountTypes.${idx}.discountEndAt`}
@@ -698,6 +725,51 @@ const FirmForm = ({ firm, onSaved, onCancel }: FirmFormProps) => {
                             </FormControl>
                             <FormLabel className="font-normal cursor-pointer">
                               {platform}
+                            </FormLabel>
+                          </FormItem>
+                        )
+                      }}
+                    />
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+           <FormField
+            control={form.control}
+            name="tradableAssets"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tradable Assets</FormLabel>
+                <div className="flex flex-wrap gap-2">
+                  {tradableAssetOptions.map((asset) => (
+                    <FormField
+                      key={asset}
+                      control={form.control}
+                      name="tradableAssets"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={asset}
+                            className="flex flex-row items-start space-x-2 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(asset)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...field.value, asset])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                          (value) => value !== asset
+                                        )
+                                      )
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer">
+                              {asset}
                             </FormLabel>
                           </FormItem>
                         )
